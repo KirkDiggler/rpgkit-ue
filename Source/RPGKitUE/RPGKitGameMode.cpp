@@ -1,6 +1,7 @@
 // rpgkit UE — GameMode implementation
 
 #include "RPGKitGameMode.h"
+#include "RPGKitActionExecutor.h"
 #include "RPGKitBus.h"
 #include "RPGKitEffect.h"
 #include "Engine/GameInstance.h"
@@ -218,7 +219,8 @@ void ARPGKitGameMode::EnemyTakeTurn()
 	Attack.Amount = 6;
 	Attack.Target = ERPGKitActionTargetMode::Enemy;
 
-	ExecuteCardAction(Context, Attack);
+	FRPGKitActionExecutor Executor;
+	Executor.ExecuteAction(*this, Context, Attack);
 }
 
 const FRPGKitFighter& ARPGKitGameMode::GetFighter(const FString& Id) const
@@ -336,9 +338,10 @@ bool ARPGKitGameMode::PlayCard(int32 CardIndex)
 		EmitCombatLog(FString::Printf(TEXT("%s has no actions."), *Card.Name));
 	}
 
+	FRPGKitActionExecutor Executor;
 	for (const FRPGKitCardAction& Action : Card.Actions)
 	{
-		ExecuteCardAction(Context, Action);
+		Executor.ExecuteAction(*this, Context, Action);
 	}
 
 	// Remove card from hand.
@@ -357,85 +360,6 @@ bool ARPGKitGameMode::PlayCard(int32 CardIndex)
 	OnHandChanged();
 
 	return true;
-}
-
-bool ARPGKitGameMode::ExecuteCardAction(const FRPGKitActionContext& Context, const FRPGKitCardAction& Action)
-{
-	const FString TargetId = ResolveActionTargetId(Action, Context);
-
-	switch (Action.Type)
-	{
-	case ERPGKitCardActionType::Damage:
-		Strike(Context.ActorId, TargetId, Action.Amount);
-		return true;
-
-	case ERPGKitCardActionType::Block:
-		AddBlock(TargetId, Action.Amount);
-		return true;
-
-	case ERPGKitCardActionType::Heal:
-		if (FRPGKitFighter* Target = FindFighter(TargetId))
-		{
-			Target->CurrentHP = FMath::Min(Target->MaxHP, Target->CurrentHP + Action.Amount);
-			EmitCombatLog(FString::Printf(TEXT("%s heals for %d HP → HP: %d/%d"),
-				*Target->Name, Action.Amount, Target->CurrentHP, Target->MaxHP));
-			return true;
-		}
-		return false;
-
-	case ERPGKitCardActionType::ApplyBleed:
-		{
-			URPGKitBleedEffect* Bleed = NewObject<URPGKitBleedEffect>(this);
-			Bleed->TargetEntityId = TargetId;
-			Bleed->Stacks = Action.Amount > 0 ? Action.Amount : 3;
-			Bleed->DamagePerStack = Action.DurationTurns > 0 ? Action.DurationTurns : 2;
-
-			if (ApplyEffect(Bleed))
-			{
-				const FRPGKitFighter& Target = GetFighter(TargetId);
-				EmitCombatLog(FString::Printf(TEXT("%s is Bleeding (%d stacks, %d damage per stack)."),
-					*Target.Name, Bleed->Stacks, Bleed->DamagePerStack));
-				return true;
-			}
-			return false;
-		}
-
-	case ERPGKitCardActionType::ApplyVulnerable:
-		{
-			URPGKitVulnerableEffect* Vulnerable = NewObject<URPGKitVulnerableEffect>(this);
-			Vulnerable->TargetEntityId = TargetId;
-			Vulnerable->PercentBonus = Action.Amount > 0 ? Action.Amount : 50;
-			Vulnerable->RemainingTurns = Action.DurationTurns > 0 ? Action.DurationTurns : 2;
-
-			if (ApplyEffect(Vulnerable))
-			{
-				const FRPGKitFighter& Target = GetFighter(TargetId);
-				EmitCombatLog(FString::Printf(TEXT("%s is Vulnerable (+%d%% damage) for %d turns."),
-					*Target.Name, Vulnerable->PercentBonus, Vulnerable->RemainingTurns));
-				return true;
-			}
-			return false;
-		}
-	}
-
-	return false;
-}
-
-FString ARPGKitGameMode::ResolveActionTargetId(const FRPGKitCardAction& Action, const FRPGKitActionContext& Context) const
-{
-	switch (Action.Target)
-	{
-	case ERPGKitActionTargetMode::Self:
-		return Context.ActorId;
-
-	case ERPGKitActionTargetMode::Enemy:
-		return Context.EnemyId;
-
-	case ERPGKitActionTargetMode::Explicit:
-		return Action.ExplicitTargetId.IsEmpty() ? Context.EnemyId : Action.ExplicitTargetId;
-	}
-
-	return Context.EnemyId;
 }
 
 FString ARPGKitGameMode::GetHandCardSummary(int32 CardIndex) const
