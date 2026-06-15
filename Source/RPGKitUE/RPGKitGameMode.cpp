@@ -22,12 +22,20 @@ void ARPGKitGameMode::SetupEncounter(const FRPGKitFighter& Hero, const FRPGKitFi
 
 bool ARPGKitGameMode::ApplyEffect(URPGKitEffect* Effect)
 {
-	return GetOrCreateEncounterRuntime()->ApplyEffect(Effect);
+	if (URPGKitEncounterRuntime* Runtime = GetReadyEncounterRuntime(TEXT("ApplyEffect")))
+	{
+		return Runtime->ApplyEffect(Effect);
+	}
+	return false;
 }
 
 bool ARPGKitGameMode::RemoveEffect(URPGKitEffect* Effect)
 {
-	return GetOrCreateEncounterRuntime()->RemoveEffect(Effect);
+	if (URPGKitEncounterRuntime* Runtime = GetReadyEncounterRuntime(TEXT("RemoveEffect")))
+	{
+		return Runtime->RemoveEffect(Effect);
+	}
+	return false;
 }
 
 FRPGKitChainResult ARPGKitGameMode::Strike(
@@ -35,31 +43,42 @@ FRPGKitChainResult ARPGKitGameMode::Strike(
 	const FString& TargetId,
 	int32 BaseDamage)
 {
-	return GetOrCreateEncounterRuntime()->Strike(AttackerId, TargetId, BaseDamage);
+	if (URPGKitEncounterRuntime* Runtime = GetReadyEncounterRuntime(TEXT("Strike")))
+	{
+		return Runtime->Strike(AttackerId, TargetId, BaseDamage);
+	}
+	return FRPGKitChainResult();
 }
 
 void ARPGKitGameMode::DealRawDamage(const FString& TargetId, int32 Amount)
 {
-	GetOrCreateEncounterRuntime()->DealRawDamage(TargetId, Amount);
+	if (URPGKitEncounterRuntime* Runtime = GetReadyEncounterRuntime(TEXT("DealRawDamage")))
+	{
+		Runtime->DealRawDamage(TargetId, Amount);
+	}
 }
 
 void ARPGKitGameMode::AddBlock(const FString& FighterId, int32 Amount)
 {
-	GetOrCreateEncounterRuntime()->AddBlock(FighterId, Amount);
+	if (URPGKitEncounterRuntime* Runtime = GetReadyEncounterRuntime(TEXT("AddBlock")))
+	{
+		Runtime->AddBlock(FighterId, Amount);
+	}
 }
 
 void ARPGKitGameMode::EndTurn()
 {
-	URPGKitEncounterRuntime* Runtime = GetOrCreateEncounterRuntime();
+	URPGKitEncounterRuntime* Runtime = GetReadyEncounterRuntime(TEXT("EndTurn"));
+	if (!Runtime)
+	{
+		return;
+	}
 	Runtime->SetTurnNumber(Runtime->GetTurnNumber() + 1);
 
 	// Publish turn.ended so subscribers react (bleed ticks, etc.).
-	if (Runtime)
-	{
-		rpg::core::Topic<int32> topic =
-			RPGKitTopics::kTurnEnded.on(Runtime->GetBus());
-		(void)topic.publish(Runtime->GetTurnNumber());
-	}
+	rpg::core::Topic<int32> topic =
+		RPGKitTopics::kTurnEnded.on(Runtime->GetBus());
+	(void)topic.publish(Runtime->GetTurnNumber());
 
 	OnTurnEnded(Runtime->GetTurnNumber());
 	EmitCombatLog(FString::Printf(TEXT("--- Turn %d ---"), Runtime->GetTurnNumber()));
@@ -71,7 +90,10 @@ void ARPGKitGameMode::EndTurn()
 
 void ARPGKitGameMode::ClearAllBlock()
 {
-	GetOrCreateEncounterRuntime()->ClearAllBlock();
+	if (URPGKitEncounterRuntime* Runtime = GetReadyEncounterRuntime(TEXT("ClearAllBlock")))
+	{
+		Runtime->ClearAllBlock();
+	}
 }
 
 void ARPGKitGameMode::EnemyTakeTurn()
@@ -111,17 +133,28 @@ const FRPGKitFighter& ARPGKitGameMode::GetFighter(const FString& Id) const
 
 FRPGKitFighter* ARPGKitGameMode::FindFighter(const FString& Id)
 {
-	return GetOrCreateEncounterRuntime()->FindFighter(Id);
+	if (URPGKitEncounterRuntime* Runtime = GetReadyEncounterRuntime(TEXT("FindFighter")))
+	{
+		return Runtime->FindFighter(Id);
+	}
+	return nullptr;
 }
 
 void ARPGKitGameMode::EmitCombatLog(const FString& Message)
 {
-	GetOrCreateEncounterRuntime()->EmitCombatLog(Message);
+	if (URPGKitEncounterRuntime* Runtime = GetReadyEncounterRuntime(TEXT("EmitCombatLog")))
+	{
+		Runtime->EmitCombatLog(Message);
+		return;
+	}
+	OnCombatLog(Message);
 }
 
 rpg::core::Bus& ARPGKitGameMode::GetBus()
 {
-	return GetOrCreateEncounterRuntime()->GetBus();
+	URPGKitEncounterRuntime* Runtime = GetReadyEncounterRuntime(TEXT("GetBus"));
+	check(Runtime);
+	return Runtime->GetBus();
 }
 
 // =========================================================================
@@ -374,4 +407,28 @@ URPGKitEncounterRuntime* ARPGKitGameMode::GetOrCreateEncounterRuntime()
 const URPGKitEncounterRuntime* ARPGKitGameMode::GetEncounterRuntime() const
 {
 	return EncounterRuntime;
+}
+
+URPGKitEncounterRuntime* ARPGKitGameMode::GetReadyEncounterRuntime(const TCHAR* OperationName)
+{
+	URPGKitEncounterRuntime* Runtime = GetOrCreateEncounterRuntime();
+	if (!Runtime->IsReady())
+	{
+		const FString Message = FString::Printf(TEXT("%s failed: encounter is not set up."), OperationName);
+		UE_LOG(LogTemp, Error, TEXT("RPGKit: %s"), *Message);
+		OnCombatLog(Message);
+		return nullptr;
+	}
+	return Runtime;
+}
+
+const URPGKitEncounterRuntime* ARPGKitGameMode::GetReadyEncounterRuntime(const TCHAR* OperationName) const
+{
+	const URPGKitEncounterRuntime* Runtime = GetEncounterRuntime();
+	if (!Runtime || !Runtime->IsReady())
+	{
+		UE_LOG(LogTemp, Error, TEXT("RPGKit: %s failed: encounter is not set up."), OperationName);
+		return nullptr;
+	}
+	return Runtime;
 }

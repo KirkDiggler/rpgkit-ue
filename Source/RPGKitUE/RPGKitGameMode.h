@@ -276,6 +276,8 @@ private:
 	FRPGKitFighter* FindFighter(const FString& Id);
 	URPGKitEncounterRuntime* GetOrCreateEncounterRuntime();
 	const URPGKitEncounterRuntime* GetEncounterRuntime() const;
+	URPGKitEncounterRuntime* GetReadyEncounterRuntime(const TCHAR* OperationName);
+	const URPGKitEncounterRuntime* GetReadyEncounterRuntime(const TCHAR* OperationName) const;
 
 	UPROPERTY()
 	TObjectPtr<URPGKitEncounterRuntime> EncounterRuntime;

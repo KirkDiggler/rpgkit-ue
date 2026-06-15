@@ -16,8 +16,11 @@ class URPGKitEncounterRuntime : public UObject
 	GENERATED_BODY()
 
 public:
+	virtual void BeginDestroy() override;
+
 	void SetupEncounter(ARPGKitGameMode* InHost, const FRPGKitFighter& Hero, const FRPGKitFighter& Enemy);
 	void ShutdownEncounter();
+	bool IsReady() const { return bIsReady; }
 
 	bool ApplyEffect(URPGKitEffect* Effect);
 	bool RemoveEffect(URPGKitEffect* Effect);
@@ -67,6 +70,7 @@ private:
 	UPROPERTY()
 	TArray<FRPGKitChainStep> LatestDamageBreakdown;
 
+	bool bIsReady = false;
 	int32 TurnNumber = 0;
 	int32 MaxRecentCombatLogLines = 8;
 };

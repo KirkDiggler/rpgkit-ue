@@ -9,11 +9,19 @@
 #include "rpg/core/chain.hpp"
 #include "rpg/core/topic.hpp"
 
+void URPGKitEncounterRuntime::BeginDestroy()
+{
+	ShutdownEncounter();
+	Super::BeginDestroy();
+}
+
 void URPGKitEncounterRuntime::SetupEncounter(ARPGKitGameMode* InHost, const FRPGKitFighter& Hero, const FRPGKitFighter& Enemy)
 {
 	ShutdownEncounter();
 
 	Host = InHost;
+	BusSubsystem = nullptr;
+	bIsReady = false;
 	Fighters.Empty();
 	ActiveEffects.Empty();
 	RecentCombatLog.Empty();
@@ -30,16 +38,33 @@ void URPGKitEncounterRuntime::SetupEncounter(ARPGKitGameMode* InHost, const FRPG
 			BusSubsystem = GI->GetSubsystem<URPGKitBus>();
 		}
 	}
+	if (!Host || !BusSubsystem)
+	{
+		UE_LOG(LogTemp, Error, TEXT("RPGKit: Encounter setup failed because required runtime dependencies are missing."));
+		if (Host)
+		{
+			Host->OnCombatLog(TEXT("Encounter setup failed: RPGKit bus is unavailable."));
+		}
+		return;
+	}
 
 	SubscribeEncounterRequests();
+	bIsReady = true;
 
 	EmitCombatLog(FString::Printf(TEXT("=== Encounter: %s vs %s ==="), *Hero.Name, *Enemy.Name));
 }
 
 void URPGKitEncounterRuntime::ShutdownEncounter()
 {
+	TArray<URPGKitEffect*> EffectsToRemove = ActiveEffects;
+	for (URPGKitEffect* Effect : EffectsToRemove)
+	{
+		RemoveEffect(Effect);
+	}
+
 	UnsubscribeEncounterRequests();
 	ActiveEffects.Empty();
+	bIsReady = false;
 }
 
 void URPGKitEncounterRuntime::SubscribeEncounterRequests()
@@ -97,7 +122,7 @@ rpg::core::Status URPGKitEncounterRuntime::HandleBlockRequest(const FRPGKitBlock
 
 bool URPGKitEncounterRuntime::ApplyEffect(URPGKitEffect* Effect)
 {
-	if (!BusSubsystem || !Effect) return false;
+	if (!bIsReady || !BusSubsystem || !Effect) return false;
 
 	if (ActiveEffects.Contains(Effect))
 	{
@@ -138,6 +163,7 @@ FRPGKitChainResult URPGKitEncounterRuntime::Strike(const FString& AttackerId, co
 {
 	if (!BusSubsystem)
 	{
+		UE_LOG(LogTemp, Error, TEXT("RPGKit: Strike called before encounter runtime was ready."));
 		return FRPGKitChainResult();
 	}
 
@@ -256,6 +282,6 @@ void URPGKitEncounterRuntime::EmitCombatLog(const FString& Message)
 
 rpg::core::Bus& URPGKitEncounterRuntime::GetBus()
 {
-	check(BusSubsystem);
+	checkf(BusSubsystem, TEXT("Encounter runtime requires URPGKitBus before publishing or subscribing."));
 	return BusSubsystem->GetRawBus();
 }
