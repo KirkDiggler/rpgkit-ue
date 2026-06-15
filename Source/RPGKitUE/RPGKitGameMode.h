@@ -11,6 +11,7 @@
 #include "RPGKitGameMode.generated.h"
 
 class URPGKitBus;
+class URPGKitEncounterRuntime;
 class URPGKitEffect;
 struct FRPGKitActionExecutor;
 
@@ -222,16 +223,16 @@ public:
 	const FRPGKitFighter& GetFighter(const FString& Id) const;
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "RPGKit")
-	int32 GetTurnNumber() const { return TurnNumber; }
+	int32 GetTurnNumber() const;
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "RPGKit|Debug")
-	const TArray<FString>& GetRecentCombatLog() const { return RecentCombatLog; }
+	const TArray<FString>& GetRecentCombatLog() const;
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "RPGKit|Debug")
 	FString GetRecentCombatLogText() const;
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "RPGKit|Debug")
-	const TArray<FRPGKitChainStep>& GetLatestDamageBreakdown() const { return LatestDamageBreakdown; }
+	const TArray<FRPGKitChainStep>& GetLatestDamageBreakdown() const;
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "RPGKit|Debug")
 	FString GetLatestDamageBreakdownText() const;
@@ -273,27 +274,11 @@ private:
 	void EmitCombatLog(const FString& Message);
 	void ClearAllBlock();
 	FRPGKitFighter* FindFighter(const FString& Id);
-
-	// Fighters keyed by ID.
-	TMap<FString, FRPGKitFighter> Fighters;
-
-	// Track applied effects for removal.
-	UPROPERTY()
-	TArray<URPGKitEffect*> ActiveEffects;
-
-	// The bus is owned by the subsystem; cached pointer.
-	UPROPERTY()
-	TObjectPtr<URPGKitBus> BusSubsystem;
-
-	rpg::core::SubscriptionId RawDamageSubscriptionId;
-	rpg::core::SubscriptionId BlockSubscriptionId;
+	URPGKitEncounterRuntime* GetOrCreateEncounterRuntime();
+	const URPGKitEncounterRuntime* GetEncounterRuntime() const;
+	URPGKitEncounterRuntime* GetReadyEncounterRuntime(const TCHAR* OperationName);
+	const URPGKitEncounterRuntime* GetReadyEncounterRuntime(const TCHAR* OperationName) const;
 
 	UPROPERTY()
-	TArray<FString> RecentCombatLog;
-
-	UPROPERTY()
-	TArray<FRPGKitChainStep> LatestDamageBreakdown;
-
-	int32 TurnNumber = 0;
-	int32 MaxRecentCombatLogLines = 8;
+	TObjectPtr<URPGKitEncounterRuntime> EncounterRuntime;
 };

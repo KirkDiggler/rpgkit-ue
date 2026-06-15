@@ -26,7 +26,10 @@ Important files:
 
 ```text
 Source/RPGKitUE/RPGKitGameMode.h/.cpp
-  encounter state, card model, Blueprint API
+  Unreal GameMode bridge, card model/deck flow, Blueprint API
+
+Source/RPGKitUE/RPGKitEncounterRuntime.h/.cpp
+  encounter state, request handlers, damage/block mutation, effect ownership
 
 Source/RPGKitUE/RPGKitActionExecutor.h/.cpp
   plain C++ action executor shared by player cards and enemy attacks
@@ -52,22 +55,23 @@ Content/Tutorial-1.umap
 
 ## Current Architecture Step
 
-The code is starting to move direct action mutations to typed gameplay requests.
+The code now separates Unreal GameMode responsibilities from encounter runtime
+responsibilities.
 
 Implemented:
 
-1. Added `FRPGKitBlockRequest`.
-2. Added `combat.block.requested` topic.
-3. Made Block actions publish a request from `FRPGKitActionExecutor`.
-4. Made `ARPGKitGameMode` subscribe to the request and call `AddBlock`.
-5. Kept behavior intentionally equivalent from the player's perspective.
+1. Added `URPGKitEncounterRuntime`.
+2. Moved fighter state, active effects, combat logs, damage breakdowns, and request subscriptions into the runtime.
+3. Kept `ARPGKitGameMode` as the Blueprint-facing compatibility bridge.
+4. Kept card/deck flow on GameMode for now to avoid Blueprint asset rewiring.
+5. Preserved existing action/effect behavior.
 
 Still required before merge:
 
 1. Verify the existing demo loop still works in Unreal.
 
-Do not start by redesigning effect specs or enemy intent data. Those are next
-after action execution is stable.
+Do not start by redesigning effect specs or enemy intent data until the runtime
+boundary feels stable.
 
 ## Known Follow-Ups
 
@@ -81,7 +85,7 @@ Git LFS is not currently configured; current binary assets are small.
 
 ## Verified Recently
 
-Full C++ build succeeded after adding the Block request path:
+Full C++ build succeeded after extracting `URPGKitEncounterRuntime`:
 
 ```text
 RPGKitUEEditor Win64 Development -NoHotReload
