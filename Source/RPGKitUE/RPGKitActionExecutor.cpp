@@ -2,6 +2,7 @@
 
 #include "RPGKitActionExecutor.h"
 #include "RPGKitEffect.h"
+#include "RPGKitGameMode.h"
 
 bool FRPGKitActionExecutor::ExecuteAction(
 	ARPGKitGameMode& Runtime,

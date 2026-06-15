@@ -3,7 +3,10 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "RPGKitGameMode.h"
+
+class ARPGKitGameMode;
+struct FRPGKitActionContext;
+struct FRPGKitCardAction;
 
 struct FRPGKitActionExecutor
 {
