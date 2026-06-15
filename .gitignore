@@ -1,0 +1,24 @@
+# Unreal Engine
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+*.sln
+*.sln.DotSettings.user
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.xcworkspace/
+xcuserdata/
+
+# Build
+build/
+
+# Unreal content assets are source for this workshop demo.
+# Track .uasset/.umap files; ignore generated caches above.
+
+# Local OS noise
+Thumbs.db
+.DS_Store

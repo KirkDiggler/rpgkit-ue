@@ -1,0 +1,11 @@
+* text=auto
+
+# Unreal assets are binary source files for this workshop.
+*.uasset binary
+*.umap binary
+
+# Images are binary docs/debug artifacts.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
