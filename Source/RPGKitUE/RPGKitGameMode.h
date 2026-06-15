@@ -286,6 +286,7 @@ private:
 	TObjectPtr<URPGKitBus> BusSubsystem;
 
 	rpg::core::SubscriptionId RawDamageSubscriptionId;
+	rpg::core::SubscriptionId BlockSubscriptionId;
 
 	UPROPERTY()
 	TArray<FString> RecentCombatLog;

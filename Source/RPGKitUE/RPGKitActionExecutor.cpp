@@ -18,7 +18,16 @@ bool FRPGKitActionExecutor::ExecuteAction(
 		return true;
 
 	case ERPGKitCardActionType::Block:
-		Runtime.AddBlock(TargetId, Action.Amount);
+		{
+			FRPGKitBlockRequest Request;
+			Request.SourceId = Context.ActorId;
+			Request.TargetId = TargetId;
+			Request.Amount = Action.Amount;
+
+			rpg::core::Topic<FRPGKitBlockRequest> BlockTopic =
+				RPGKitTopics::kBlockRequested.on(Runtime.GetBus());
+			(void)BlockTopic.publish(Request);
+		}
 		return true;
 
 	case ERPGKitCardActionType::Heal:
