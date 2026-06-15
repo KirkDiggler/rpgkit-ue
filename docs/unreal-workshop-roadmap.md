@@ -123,9 +123,9 @@ The exciting next seam is breaking action and effect logic out of
 Current pressure points:
 
 ```text
-ARPGKitGameMode owns encounter state
-ARPGKitGameMode also interprets every action type
-ARPGKitGameMode creates concrete effects directly
+ARPGKitGameMode still owns card/deck flow and Blueprint API
+URPGKitEncounterRuntime owns encounter state and request handlers
+FRPGKitActionExecutor still creates concrete effects directly
 FRPGKitCardAction uses generic Amount and DurationTurns for too many meanings
 enemy attacks reuse the card action path, but still live as hardcoded content
 ```
@@ -138,16 +138,19 @@ CardDefinition DataAsset
 
 ActionExecutor
   -> resolves targets
-  -> dispatches each action kind
-  -> mutates encounter state through a small runtime interface
-  -> emits observations/logs
+  -> dispatches action kinds
+  -> publishes typed requests where possible
 
 EffectFactory or EffectDefinition
   -> turns authored effect data into runtime URPGKitEffect objects
 
+EncounterRuntime
+  -> owns encounter state
+  -> handles typed requests
+  -> mutates combat state
+
 ARPGKitGameMode
-  -> owns encounter lifetime and state for now
-  -> delegates action execution
+  -> bridges Unreal/Blueprint to the runtime
   -> remains the Blueprint-facing entry point
 ```
 

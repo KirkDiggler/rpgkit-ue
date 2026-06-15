@@ -93,12 +93,13 @@ Bless re-roll its 1d4 per attack.
 ### Layer 2: C++ wrappers (Unreal types)
 
 Files: `Source/RPGKitUE/RPGKitBus.{h,cpp}`, `RPGKitGameMode.{h,cpp}`,
-`RPGKitEffect.{h,cpp}`
+`RPGKitEncounterRuntime.{h,cpp}`, `RPGKitEffect.{h,cpp}`
 
 | Unreal class | Wraps | Purpose |
 |---|---|---|
 | `URPGKitBus` | `rpg::core::Bus` | GameInstanceSubsystem — one bus per session |
-| `ARPGKitGameMode` | Orchestration | Fighter state, damage application, effect management |
+| `ARPGKitGameMode` | Unreal bridge | Blueprint-facing API, card/deck flow, level/HUD integration |
+| `URPGKitEncounterRuntime` | Encounter state | Fighters, request handlers, damage/block mutation, effect ownership |
 | `URPGKitEffect` | `rpg::core::Effect` | Base class for Blueprintable effects |
 | `URPGKitToughSkinEffect` | Tough Skin rule | Reduces damage against a specific entity |
 | `URPGKitBleedEffect` | Bleed DoT | Stacks, ticks on turn.ended, self-removes at 0 |

@@ -3,6 +3,7 @@
 #include "RPGKitGameMode.h"
 #include "RPGKitActionExecutor.h"
 #include "RPGKitBus.h"
+#include "RPGKitEncounterRuntime.h"
 #include "RPGKitEffect.h"
 #include "Engine/GameInstance.h"
 
@@ -16,89 +17,17 @@ ARPGKitGameMode::ARPGKitGameMode()
 
 void ARPGKitGameMode::SetupEncounter(const FRPGKitFighter& Hero, const FRPGKitFighter& Enemy)
 {
-	if (BusSubsystem && RawDamageSubscriptionId.value != 0)
-	{
-		(void)BusSubsystem->GetRawBus().unsubscribe(RawDamageSubscriptionId);
-		RawDamageSubscriptionId = rpg::core::SubscriptionId{};
-	}
-	if (BusSubsystem && BlockSubscriptionId.value != 0)
-	{
-		(void)BusSubsystem->GetRawBus().unsubscribe(BlockSubscriptionId);
-		BlockSubscriptionId = rpg::core::SubscriptionId{};
-	}
-
-	Fighters.Empty();
-	ActiveEffects.Empty();
-	RecentCombatLog.Empty();
-	TurnNumber = 0;
-
-	Fighters.Add("hero", Hero);
-	Fighters.Add("goblin", Enemy);
-
-	// Cache the bus subsystem.
-	if (UGameInstance* GI = GetGameInstance())
-	{
-		BusSubsystem = GI->GetSubsystem<URPGKitBus>();
-	}
-
-	if (BusSubsystem)
-	{
-		rpg::core::Topic<FRPGKitRawDamageRequest> rawDamageTopic =
-			RPGKitTopics::kRawDamageRequested.on(BusSubsystem->GetRawBus());
-
-		RawDamageSubscriptionId = rawDamageTopic.subscribe([this](const FRPGKitRawDamageRequest& Request) -> rpg::core::Status {
-			EmitCombatLog(FString::Printf(TEXT("%s requests %d raw damage to %s."),
-				*Request.SourceId, Request.Amount, *Request.TargetId));
-			DealRawDamage(Request.TargetId, Request.Amount);
-			return rpg::core::Status::ok();
-		});
-
-		rpg::core::Topic<FRPGKitBlockRequest> blockTopic =
-			RPGKitTopics::kBlockRequested.on(BusSubsystem->GetRawBus());
-
-		BlockSubscriptionId = blockTopic.subscribe([this](const FRPGKitBlockRequest& Request) -> rpg::core::Status {
-			EmitCombatLog(FString::Printf(TEXT("%s requests %d block to %s."),
-				*Request.SourceId, Request.Amount, *Request.TargetId));
-			AddBlock(Request.TargetId, Request.Amount);
-			return rpg::core::Status::ok();
-		});
-	}
-
-	EmitCombatLog(FString::Printf(TEXT("=== Encounter: %s vs %s ==="), *Hero.Name, *Enemy.Name));
+	GetOrCreateEncounterRuntime()->SetupEncounter(this, Hero, Enemy);
 }
 
 bool ARPGKitGameMode::ApplyEffect(URPGKitEffect* Effect)
 {
-	if (!BusSubsystem || !Effect) return false;
-
-	// If already active, remove first.
-	if (ActiveEffects.Contains(Effect))
-	{
-		RemoveEffect(Effect);
-	}
-
-	bool bSuccess = BusSubsystem->ApplyEffect(Effect);
-	if (bSuccess)
-	{
-		ActiveEffects.Add(Effect);
-		Effect->OnEffectApplied();
-		OnEffectApplied(Effect->GetName());
-	}
-	return bSuccess;
+	return GetOrCreateEncounterRuntime()->ApplyEffect(Effect);
 }
 
 bool ARPGKitGameMode::RemoveEffect(URPGKitEffect* Effect)
 {
-	if (!BusSubsystem || !Effect) return false;
-
-	bool bSuccess = BusSubsystem->RemoveEffect(Effect);
-	if (bSuccess)
-	{
-		ActiveEffects.Remove(Effect);
-		Effect->OnEffectRemoved();
-		OnEffectRemoved(Effect->GetName());
-	}
-	return bSuccess;
+	return GetOrCreateEncounterRuntime()->RemoveEffect(Effect);
 }
 
 FRPGKitChainResult ARPGKitGameMode::Strike(
@@ -106,94 +35,34 @@ FRPGKitChainResult ARPGKitGameMode::Strike(
 	const FString& TargetId,
 	int32 BaseDamage)
 {
-	if (!BusSubsystem)
-	{
-		return FRPGKitChainResult();
-	}
-
-	FRPGKitDamageEvent Event;
-	Event.AttackerId = AttackerId;
-	Event.TargetId = TargetId;
-	Event.BaseAmount = BaseDamage;
-
-	FRPGKitChainResult Result = BusSubsystem->ExecuteDamageChain(Event);
-	LatestDamageBreakdown = Result.Breakdown;
-
-	int32 FinalDamage = Result.Value;
-
-	// Apply damage to target.
-	if (FRPGKitFighter* Target = FindFighter(TargetId))
-	{
-		int32 Blocked = FMath::Min(Target->Block, FinalDamage);
-		Target->Block -= Blocked;
-		int32 HPDamage = FinalDamage - Blocked;
-		Target->CurrentHP = FMath::Max(0, Target->CurrentHP - HPDamage);
-
-		OnDamageDealt(Result);
-
-		if (Blocked > 0)
-		{
-			EmitCombatLog(FString::Printf(
-				TEXT("%s blocks %d damage! (%d gets through)"),
-				*Target->Name, Blocked, HPDamage));
-		}
-
-		EmitCombatLog(FString::Printf(
-			TEXT("%s strikes %s for %d damage → %s HP: %d/%d"),
-			*AttackerId, *TargetId, FinalDamage,
-			*Target->Name, Target->CurrentHP, Target->MaxHP));
-
-		if (!Target->IsAlive())
-		{
-			OnFighterDied(TargetId);
-		}
-	}
-
-	return Result;
+	return GetOrCreateEncounterRuntime()->Strike(AttackerId, TargetId, BaseDamage);
 }
 
 void ARPGKitGameMode::DealRawDamage(const FString& TargetId, int32 Amount)
 {
-	if (FRPGKitFighter* Target = FindFighter(TargetId))
-	{
-		Target->CurrentHP = FMath::Max(0, Target->CurrentHP - Amount);
-
-		EmitCombatLog(FString::Printf(
-			TEXT("%s takes %d raw damage → HP: %d/%d"),
-			*Target->Name, Amount, Target->CurrentHP, Target->MaxHP));
-
-		if (!Target->IsAlive())
-		{
-			OnFighterDied(TargetId);
-		}
-	}
+	GetOrCreateEncounterRuntime()->DealRawDamage(TargetId, Amount);
 }
 
 void ARPGKitGameMode::AddBlock(const FString& FighterId, int32 Amount)
 {
-	if (FRPGKitFighter* Fighter = FindFighter(FighterId))
-	{
-		Fighter->Block += Amount;
-		EmitCombatLog(FString::Printf(
-			TEXT("%s gains %d block (total: %d)"),
-			*Fighter->Name, Amount, Fighter->Block));
-	}
+	GetOrCreateEncounterRuntime()->AddBlock(FighterId, Amount);
 }
 
 void ARPGKitGameMode::EndTurn()
 {
-	TurnNumber++;
+	URPGKitEncounterRuntime* Runtime = GetOrCreateEncounterRuntime();
+	Runtime->SetTurnNumber(Runtime->GetTurnNumber() + 1);
 
 	// Publish turn.ended so subscribers react (bleed ticks, etc.).
-	if (BusSubsystem)
+	if (Runtime)
 	{
 		rpg::core::Topic<int32> topic =
-			RPGKitTopics::kTurnEnded.on(BusSubsystem->GetRawBus());
-		(void)topic.publish(TurnNumber);
+			RPGKitTopics::kTurnEnded.on(Runtime->GetBus());
+		(void)topic.publish(Runtime->GetTurnNumber());
 	}
 
-	OnTurnEnded(TurnNumber);
-	EmitCombatLog(FString::Printf(TEXT("--- Turn %d ---"), TurnNumber));
+	OnTurnEnded(Runtime->GetTurnNumber());
+	EmitCombatLog(FString::Printf(TEXT("--- Turn %d ---"), Runtime->GetTurnNumber()));
 
 	EnemyTakeTurn();
 	ClearAllBlock();
@@ -202,15 +71,7 @@ void ARPGKitGameMode::EndTurn()
 
 void ARPGKitGameMode::ClearAllBlock()
 {
-	for (auto& Pair : Fighters)
-	{
-		if (Pair.Value.Block > 0)
-		{
-			EmitCombatLog(FString::Printf(
-				TEXT("%s's block expires."), *Pair.Value.Name));
-		}
-		Pair.Value.Block = 0;
-	}
+	GetOrCreateEncounterRuntime()->ClearAllBlock();
 }
 
 void ARPGKitGameMode::EnemyTakeTurn()
@@ -241,33 +102,26 @@ void ARPGKitGameMode::EnemyTakeTurn()
 const FRPGKitFighter& ARPGKitGameMode::GetFighter(const FString& Id) const
 {
 	static FRPGKitFighter Dummy;
-	if (const FRPGKitFighter* Found = Fighters.Find(Id))
+	if (const URPGKitEncounterRuntime* Runtime = GetEncounterRuntime())
 	{
-		return *Found;
+		return Runtime->GetFighter(Id);
 	}
 	return Dummy;
 }
 
 FRPGKitFighter* ARPGKitGameMode::FindFighter(const FString& Id)
 {
-	return Fighters.Find(Id);
+	return GetOrCreateEncounterRuntime()->FindFighter(Id);
 }
 
 void ARPGKitGameMode::EmitCombatLog(const FString& Message)
 {
-	RecentCombatLog.Add(Message);
-	while (RecentCombatLog.Num() > MaxRecentCombatLogLines)
-	{
-		RecentCombatLog.RemoveAt(0);
-	}
-
-	OnCombatLog(Message);
+	GetOrCreateEncounterRuntime()->EmitCombatLog(Message);
 }
 
 rpg::core::Bus& ARPGKitGameMode::GetBus()
 {
-	check(BusSubsystem);
-	return BusSubsystem->GetRawBus();
+	return GetOrCreateEncounterRuntime()->GetBus();
 }
 
 // =========================================================================
@@ -429,12 +283,13 @@ FString ARPGKitGameMode::GetHandCardSummary(int32 CardIndex) const
 
 FString ARPGKitGameMode::GetDamageBreakdownSummary(int32 StepIndex) const
 {
-	if (!LatestDamageBreakdown.IsValidIndex(StepIndex))
+	const TArray<FRPGKitChainStep>& DamageBreakdown = GetLatestDamageBreakdown();
+	if (!DamageBreakdown.IsValidIndex(StepIndex))
 	{
 		return FString::Printf(TEXT("[%d] <empty>"), StepIndex);
 	}
 
-	const FRPGKitChainStep& Step = LatestDamageBreakdown[StepIndex];
+	const FRPGKitChainStep& Step = DamageBreakdown[StepIndex];
 	return FString::Printf(TEXT("%s / %s: %d -> %d"),
 		*Step.Stage,
 		*Step.ModifierId,
@@ -444,15 +299,16 @@ FString ARPGKitGameMode::GetDamageBreakdownSummary(int32 StepIndex) const
 
 FString ARPGKitGameMode::GetRecentCombatLogText() const
 {
-	return FString::Join(RecentCombatLog, TEXT("\n"));
+	return FString::Join(GetRecentCombatLog(), TEXT("\n"));
 }
 
 FString ARPGKitGameMode::GetLatestDamageBreakdownText() const
 {
 	TArray<FString> Lines;
-	Lines.Reserve(LatestDamageBreakdown.Num());
+	const TArray<FRPGKitChainStep>& DamageBreakdown = GetLatestDamageBreakdown();
+	Lines.Reserve(DamageBreakdown.Num());
 
-	for (int32 Index = 0; Index < LatestDamageBreakdown.Num(); ++Index)
+	for (int32 Index = 0; Index < DamageBreakdown.Num(); ++Index)
 	{
 		Lines.Add(GetDamageBreakdownSummary(Index));
 	}
@@ -475,4 +331,47 @@ bool ARPGKitGameMode::DebugPlayCard(int32 CardIndex)
 {
 	EmitCombatLog(FString::Printf(TEXT("DebugPlayCard(%d)"), CardIndex));
 	return PlayCard(CardIndex);
+}
+
+int32 ARPGKitGameMode::GetTurnNumber() const
+{
+	if (const URPGKitEncounterRuntime* Runtime = GetEncounterRuntime())
+	{
+		return Runtime->GetTurnNumber();
+	}
+	return 0;
+}
+
+const TArray<FString>& ARPGKitGameMode::GetRecentCombatLog() const
+{
+	static const TArray<FString> Empty;
+	if (const URPGKitEncounterRuntime* Runtime = GetEncounterRuntime())
+	{
+		return Runtime->GetRecentCombatLog();
+	}
+	return Empty;
+}
+
+const TArray<FRPGKitChainStep>& ARPGKitGameMode::GetLatestDamageBreakdown() const
+{
+	static const TArray<FRPGKitChainStep> Empty;
+	if (const URPGKitEncounterRuntime* Runtime = GetEncounterRuntime())
+	{
+		return Runtime->GetLatestDamageBreakdown();
+	}
+	return Empty;
+}
+
+URPGKitEncounterRuntime* ARPGKitGameMode::GetOrCreateEncounterRuntime()
+{
+	if (!EncounterRuntime)
+	{
+		EncounterRuntime = NewObject<URPGKitEncounterRuntime>(this);
+	}
+	return EncounterRuntime;
+}
+
+const URPGKitEncounterRuntime* ARPGKitGameMode::GetEncounterRuntime() const
+{
+	return EncounterRuntime;
 }
