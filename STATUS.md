@@ -26,7 +26,10 @@ Important files:
 
 ```text
 Source/RPGKitUE/RPGKitGameMode.h/.cpp
-  encounter state, card model, action interpreter, Blueprint API
+  encounter state, card model, Blueprint API
+
+Source/RPGKitUE/RPGKitActionExecutor.h/.cpp
+  plain C++ action executor shared by player cards and enemy attacks
 
 Source/RPGKitUE/RPGKitBus.h/.cpp
   Unreal subsystem owning rpg::core::Bus and damage chain execution
@@ -47,17 +50,23 @@ Content/Tutorial-1.umap
   current working map
 ```
 
-## Next Step
+## Current Branch
 
-Extract action execution out of `ARPGKitGameMode` with minimal behavior change.
+Branch: `refactor/action-executor`
 
-Recommended order:
+This branch extracts action execution out of `ARPGKitGameMode` with minimal
+behavior change.
 
-1. Create `RPGKitActionExecutor.h/.cpp`.
-2. Move `ResolveActionTargetId` unchanged.
-3. Move `ExecuteCardAction` unchanged.
-4. Keep `ARPGKitGameMode` as the runtime owner and Blueprint-facing API.
-5. Build and verify the existing demo loop still works.
+Implemented:
+
+1. Created `RPGKitActionExecutor.h/.cpp`.
+2. Moved target resolution into `FRPGKitActionExecutor`.
+3. Moved action dispatch into `FRPGKitActionExecutor::ExecuteAction`.
+4. Kept `ARPGKitGameMode` as the runtime owner and Blueprint-facing API.
+
+Still required before merge:
+
+1. Verify the existing demo loop still works in Unreal.
 
 Do not start by redesigning effect specs or enemy intent data. Those are next
 after action execution is stable.
@@ -74,7 +83,7 @@ Git LFS is not currently configured; current binary assets are small.
 
 ## Verified Recently
 
-Full C++ build succeeded after the card text formatting change:
+Full C++ build succeeded after extracting `FRPGKitActionExecutor`:
 
 ```text
 RPGKitUEEditor Win64 Development -NoHotReload

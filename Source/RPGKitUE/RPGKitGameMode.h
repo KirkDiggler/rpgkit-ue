@@ -12,6 +12,7 @@
 
 class URPGKitBus;
 class URPGKitEffect;
+struct FRPGKitActionExecutor;
 
 // =========================================================================
 //  Fighter state (mirrors tutorials 02-05)
@@ -267,10 +268,10 @@ public:
 	class rpg::core::Bus& GetBus();
 
 private:
+	friend struct FRPGKitActionExecutor;
+
 	void EmitCombatLog(const FString& Message);
 	void ClearAllBlock();
-	bool ExecuteCardAction(const FRPGKitActionContext& Context, const FRPGKitCardAction& Action);
-	FString ResolveActionTargetId(const FRPGKitCardAction& Action, const FRPGKitActionContext& Context) const;
 	FRPGKitFighter* FindFighter(const FString& Id);
 
 	// Fighters keyed by ID.
