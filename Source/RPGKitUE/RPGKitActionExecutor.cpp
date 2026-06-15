@@ -18,7 +18,21 @@ bool FRPGKitActionExecutor::ExecuteAction(
 		return true;
 
 	case ERPGKitCardActionType::Block:
-		Runtime.AddBlock(TargetId, Action.Amount);
+		{
+			FRPGKitBlockRequest Request;
+			Request.SourceId = Context.ActorId;
+			Request.TargetId = TargetId;
+			Request.Amount = Action.Amount;
+
+			rpg::core::Topic<FRPGKitBlockRequest> BlockTopic =
+				RPGKitTopics::kBlockRequested.on(Runtime.GetBus());
+			const rpg::core::Status Status = BlockTopic.publish(Request);
+			if (!Status.isOk())
+			{
+				Runtime.EmitCombatLog(FString::Printf(TEXT("Block request failed: %s"), UTF8_TO_TCHAR(Status.message().c_str())));
+				return false;
+			}
+		}
 		return true;
 
 	case ERPGKitCardActionType::Heal:

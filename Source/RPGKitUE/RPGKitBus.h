@@ -59,6 +59,21 @@ struct FRPGKitRawDamageRequest
 	int32 Amount = 0;
 };
 
+USTRUCT(BlueprintType)
+struct FRPGKitBlockRequest
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadWrite, Category = "RPGKit")
+	FString SourceId;
+
+	UPROPERTY(BlueprintReadWrite, Category = "RPGKit")
+	FString TargetId;
+
+	UPROPERTY(BlueprintReadWrite, Category = "RPGKit")
+	int32 Amount = 0;
+};
+
 // Single step in a chain breakdown: "(stage) id: before → after".
 USTRUCT(BlueprintType)
 struct FRPGKitChainStep
@@ -100,6 +115,7 @@ namespace RPGKitTopics
 	inline rpg::core::TopicDef<int32> kTurnEnded("turn.ended");
 	inline rpg::core::TopicDef<FRPGKitDamageEvent> kCombatDamage("combat.damage");
 	inline rpg::core::TopicDef<FRPGKitRawDamageRequest> kRawDamageRequested("combat.raw_damage.requested");
+	inline rpg::core::TopicDef<FRPGKitBlockRequest> kBlockRequested("combat.block.requested");
 	inline std::vector<std::string> kDamageStages = {"base", "effects", "final"};
 }
 

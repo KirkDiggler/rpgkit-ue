@@ -21,6 +21,11 @@ void ARPGKitGameMode::SetupEncounter(const FRPGKitFighter& Hero, const FRPGKitFi
 		(void)BusSubsystem->GetRawBus().unsubscribe(RawDamageSubscriptionId);
 		RawDamageSubscriptionId = rpg::core::SubscriptionId{};
 	}
+	if (BusSubsystem && BlockSubscriptionId.value != 0)
+	{
+		(void)BusSubsystem->GetRawBus().unsubscribe(BlockSubscriptionId);
+		BlockSubscriptionId = rpg::core::SubscriptionId{};
+	}
 
 	Fighters.Empty();
 	ActiveEffects.Empty();
@@ -45,6 +50,16 @@ void ARPGKitGameMode::SetupEncounter(const FRPGKitFighter& Hero, const FRPGKitFi
 			EmitCombatLog(FString::Printf(TEXT("%s requests %d raw damage to %s."),
 				*Request.SourceId, Request.Amount, *Request.TargetId));
 			DealRawDamage(Request.TargetId, Request.Amount);
+			return rpg::core::Status::ok();
+		});
+
+		rpg::core::Topic<FRPGKitBlockRequest> blockTopic =
+			RPGKitTopics::kBlockRequested.on(BusSubsystem->GetRawBus());
+
+		BlockSubscriptionId = blockTopic.subscribe([this](const FRPGKitBlockRequest& Request) -> rpg::core::Status {
+			EmitCombatLog(FString::Printf(TEXT("%s requests %d block to %s."),
+				*Request.SourceId, Request.Amount, *Request.TargetId));
+			AddBlock(Request.TargetId, Request.Amount);
 			return rpg::core::Status::ok();
 		});
 	}

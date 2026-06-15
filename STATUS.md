@@ -32,7 +32,7 @@ Source/RPGKitUE/RPGKitActionExecutor.h/.cpp
   plain C++ action executor shared by player cards and enemy attacks
 
 Source/RPGKitUE/RPGKitBus.h/.cpp
-  Unreal subsystem owning rpg::core::Bus and damage chain execution
+  Unreal subsystem owning rpg::core::Bus, request topics, and damage chain execution
 
 Source/RPGKitUE/RPGKitEffect.h/.cpp
   runtime effects: Bleed, Vulnerable, Tough Skin
@@ -50,19 +50,17 @@ Content/Tutorial-1.umap
   current working map
 ```
 
-## Current Branch
+## Current Architecture Step
 
-Branch: `refactor/action-executor`
-
-This branch extracts action execution out of `ARPGKitGameMode` with minimal
-behavior change.
+The code is starting to move direct action mutations to typed gameplay requests.
 
 Implemented:
 
-1. Created `RPGKitActionExecutor.h/.cpp`.
-2. Moved target resolution into `FRPGKitActionExecutor`.
-3. Moved action dispatch into `FRPGKitActionExecutor::ExecuteAction`.
-4. Kept `ARPGKitGameMode` as the runtime owner and Blueprint-facing API.
+1. Added `FRPGKitBlockRequest`.
+2. Added `combat.block.requested` topic.
+3. Made Block actions publish a request from `FRPGKitActionExecutor`.
+4. Made `ARPGKitGameMode` subscribe to the request and call `AddBlock`.
+5. Kept behavior intentionally equivalent from the player's perspective.
 
 Still required before merge:
 
@@ -83,7 +81,7 @@ Git LFS is not currently configured; current binary assets are small.
 
 ## Verified Recently
 
-Full C++ build succeeded after extracting `FRPGKitActionExecutor`:
+Full C++ build succeeded after adding the Block request path:
 
 ```text
 RPGKitUEEditor Win64 Development -NoHotReload
